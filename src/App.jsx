@@ -5,7 +5,7 @@ import {
   Briefcase, ArrowRight, Download, Phone, MessageSquare, Plus, Image as ImageIcon, 
   Check, XCircle, Wallet, Calendar as CalendarIcon, Video, PieChart, Share2, 
   LogOut, Lock, Building2, Package, UploadCloud, Eye, Save, ClipboardList,
-  UserPlus, ShieldAlert, Banknote, Store
+  UserPlus, ShieldAlert, Banknote, Store, ArrowLeft, Ruler
 } from 'lucide-react';
 
 // --- CONSTANTS & RULES ---
@@ -18,9 +18,8 @@ const CONSTRUCTION_TASKS = [
 
 const ROLES = ["Mason", "Helper", "Electrician", "Plumber", "Carpenter", "Supervisor"];
 
-// The Brain: Anti-Theft Logic
 const CONSUMPTION_RULES = {
-  "Brick Work": { material: "Cement", unit: "Bags", rate: 0.2 }, // 1 bag per 5 sqft (Mock)
+  "Brick Work": { material: "Cement", unit: "Bags", rate: 0.2 },
   "Plastering": { material: "Cement", unit: "Bags", rate: 0.1 }, 
   "Flooring":   { material: "Cement", unit: "Bags", rate: 0.15 },
   "Slab Casting": { material: "Cement", unit: "Bags", rate: 0.3 }
@@ -29,9 +28,9 @@ const CONSUMPTION_RULES = {
 // --- MOCK DATA ---
 
 const WORKERS = [
-  { id: 1, name: "Ramesh Kumar", role: "Mason", wage: 900, status: "P", task: "Plastering", workLog: "Completed 200 sqft wall", photos: { before: null, after: null } },
-  { id: 2, name: "Suresh Yadav", role: "Mason", wage: 900, status: "P", task: "Flooring", workLog: "Leveling master bedroom", photos: { before: null, after: null } },
-  { id: 3, name: "Mohd. Aslam", role: "Helper", wage: 500, status: "P", task: "Material Shifting", workLog: "Moved 50 cement bags", photos: { before: null, after: null } },
+  { id: 1, name: "Ramesh Kumar", role: "Mason", wage: 900, status: "P", task: "Plastering", workLog: "Completed 200 sqft wall", projectId: 1, photos: { before: null, after: null } },
+  { id: 2, name: "Suresh Yadav", role: "Mason", wage: 900, status: "P", task: "Flooring", workLog: "Leveling master bedroom", projectId: 1, photos: { before: null, after: null } },
+  { id: 3, name: "Mohd. Aslam", role: "Helper", wage: 500, status: "P", task: "Material Shifting", workLog: "Moved 50 cement bags", projectId: 1, photos: { before: null, after: null } },
 ];
 
 const VENDORS = [
@@ -39,6 +38,20 @@ const VENDORS = [
   { id: 2, name: "UltraTech Supplier", billed: 1200000, paid: 1200000, status: "Clear" },
   { id: 3, name: "Local Sand Works", billed: 80000, paid: 40000, status: "Pending" },
 ];
+
+// Core Estimation Data (BOQ)
+const INITIAL_ESTIMATIONS = {
+  1: { // Project ID 1
+    materials: {
+      "Cement": { estimated: 5000, used: 4200, unit: "Bags" },
+      "Sand": { estimated: 8000, used: 6000, unit: "Cubic Ft" },
+      "Steel": { estimated: 12000, used: 11500, unit: "Kg" },
+      "Bricks": { estimated: 50000, used: 48000, unit: "Pcs" }
+    },
+    labor: { estimated: 2500, used: 2100, unit: "Man Days" }, // Total man days budget
+    timeline: { estimated: 365, used: 280, unit: "Days" }
+  }
+};
 
 const INITIAL_PROJECTS = [
   {
@@ -54,6 +67,20 @@ const INITIAL_PROJECTS = [
     supervisor: "Rahul Sharma",
     lastUpdate: "Today, 10:30 AM",
     clientName: "Mr. Verma"
+  },
+  {
+    id: 2,
+    name: "Koramangala Villa",
+    location: "4th Block, Bangalore",
+    progress: 32,
+    status: "Active",
+    budget: 12000000,
+    spent: 4500000,
+    deadline: "Aug 2025",
+    issues: 0,
+    supervisor: "Amit Singh",
+    lastUpdate: "Yesterday, 5:00 PM",
+    clientName: "Mrs. Reddy"
   }
 ];
 
@@ -86,9 +113,12 @@ const NotificationBadge = ({ count }) => count > 0 ? (
   </span>
 ) : null;
 
-const ProgressBar = ({ value, color = "bg-blue-600" }) => (
-  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-    <div className={`h-full ${color} rounded-full transition-all duration-500`} style={{ width: `${value}%` }} />
+const ProgressBar = ({ value, color = "bg-blue-600", label }) => (
+  <div className="w-full">
+    {label && <div className="flex justify-between text-xs mb-1 text-slate-500"><span>{label}</span><span>{Math.min(100, Math.round(value))}%</span></div>}
+    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+      <div className={`h-full ${value > 100 ? 'bg-red-500' : color} rounded-full transition-all duration-500`} style={{ width: `${Math.min(100, value)}%` }} />
+    </div>
   </div>
 );
 
@@ -154,6 +184,7 @@ export default function ConstructionOS() {
   const [meetings, setMeetings] = useState(INITIAL_MEETINGS);
   const [workers, setWorkers] = useState(WORKERS);
   const [vendors, setVendors] = useState(VENDORS);
+  const [estimations, setEstimations] = useState(INITIAL_ESTIMATIONS);
   const [pettyCash, setPettyCash] = useState(8500);
   const [leakageAlerts, setLeakageAlerts] = useState([]);
   const [toast, setToast] = useState(null);
@@ -162,6 +193,9 @@ export default function ConstructionOS() {
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [newProjectData, setNewProjectData] = useState({ name: '', location: '', budget: '' });
   const [selectedBill, setSelectedBill] = useState(null);
+  
+  // View States
+  const [viewProject, setViewProject] = useState(null); 
 
   // --- HELPERS ---
 
@@ -221,20 +255,58 @@ export default function ConstructionOS() {
     setWorkers(workers.map(w => w.id === id ? { ...w, status } : w));
   };
 
+  const updateEstimation = (materialName, qty, projectId = 1) => {
+    const est = estimations[projectId];
+    if (!est || !est.materials[materialName]) return;
+
+    const currentUsed = est.materials[materialName].used;
+    const max = est.materials[materialName].estimated;
+    const newUsed = currentUsed + parseFloat(qty);
+
+    // Update State
+    setEstimations(prev => ({
+      ...prev,
+      [projectId]: {
+        ...prev[projectId],
+        materials: {
+          ...prev[projectId].materials,
+          [materialName]: { ...prev[projectId].materials[materialName], used: newUsed }
+        }
+      }
+    }));
+
+    // Check Limit
+    if (newUsed > max) {
+      return { exceeded: true, diff: newUsed - max };
+    }
+    return { exceeded: false };
+  };
+
   const checkLeakage = (task, quantity, consumed) => {
+    // 1. Theoretical Check (Anti-Theft)
     const rule = CONSUMPTION_RULES[task];
     if (rule) {
       const allowed = quantity * rule.rate; 
       const actual = parseFloat(consumed);
       
-      if (actual > allowed * 1.1) { // 10% tolerance
+      if (actual > allowed * 1.1) {
         const extra = (actual - allowed).toFixed(1);
         const alertMsg = `⚠️ LEAKAGE: ${task} used ${extra} ${rule.unit} excess!`;
         setLeakageAlerts(prev => [alertMsg, ...prev]);
         addActivity('alert', alertMsg, 'System');
-        showToast("⚠️ Leakage Alert Sent to Owner");
-      } else {
-        showToast("Consumption Verified: OK");
+        showToast("⚠️ Leakage Alert Sent");
+      }
+    }
+
+    // 2. Estimation Check (Budget Control)
+    // Map tasks to materials (Simplified for demo)
+    let materialName = null;
+    if (task.includes("Brick") || task.includes("Plaster") || task.includes("Flooring") || task.includes("Casting")) materialName = "Cement";
+    
+    if (materialName && consumed) {
+      const status = updateEstimation(materialName, consumed);
+      if (status?.exceeded) {
+        // This is handled in the UI by requesting a reason
       }
     }
   };
@@ -282,95 +354,240 @@ export default function ConstructionOS() {
         </div>
       </Modal>
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div><h2 className="text-2xl font-bold text-slate-800">Command Center</h2><p className="text-slate-500">Overview of all active sites & pending actions.</p></div>
-        <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-50"><Download size={16} /> CA Report</button>
-          <button onClick={() => setIsProjectModalOpen(true)} className="px-4 py-2 bg-blue-900 text-white rounded-lg text-sm font-medium hover:bg-blue-800 shadow-lg shadow-blue-900/20 flex items-center gap-2"><Plus size={16} /> New Project</button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Active Projects" value={projects.length} subtext="All on schedule" icon={Briefcase} />
-        <StatCard title="Petty Cash" value={`₹ ${pettyCash.toLocaleString()}`} subtext="Supervisor Wallet" icon={Wallet} />
-        <StatCard title="Pending Approvals" value={requests.filter(r => r.status === 'pending').length} subtext="Requires attention" icon={AlertTriangle} trend="negative" />
-        <StatCard title="Vendor Dues" value="₹ 4.8L" subtext="3 Invoices Pending" icon={IndianRupee} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-blue-50/50">
-              <h3 className="font-semibold text-slate-800 flex items-center gap-2"><CheckCircle2 size={18} className="text-blue-600"/> Approval Queue</h3>
-              <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded-full">{requests.filter(r => r.status === 'pending').length} Pending</span>
+      {/* Main View OR Project Detail View */}
+      {viewProject === null ? (
+        <>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div><h2 className="text-2xl font-bold text-slate-800">Command Center</h2><p className="text-slate-500">Overview of all active sites & pending actions.</p></div>
+            <div className="flex gap-3">
+              <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-50"><Download size={16} /> CA Report</button>
+              <button onClick={() => setIsProjectModalOpen(true)} className="px-4 py-2 bg-blue-900 text-white rounded-lg text-sm font-medium hover:bg-blue-800 shadow-lg shadow-blue-900/20 flex items-center gap-2"><Plus size={16} /> New Project</button>
             </div>
-            <div className="divide-y divide-slate-50 max-h-[300px] overflow-y-auto">
-              {requests.filter(r => r.status === 'pending').map(req => (
-                <div key={req.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-blue-100 p-2 rounded-lg text-blue-600"><Briefcase size={20}/></div>
-                    <div><h4 className="font-medium text-slate-800">{req.item}</h4><p className="text-xs text-slate-500">{req.quantity} • {req.project}</p></div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard title="Active Projects" value={projects.length} subtext="All on schedule" icon={Briefcase} />
+            <StatCard title="Total Workforce" value={workers.length} subtext="Workers Today" icon={Users} />
+            <StatCard title="Pending Approvals" value={requests.filter(r => r.status === 'pending').length} subtext="Requires attention" icon={AlertTriangle} trend="negative" />
+            <StatCard title="Vendor Dues" value="₹ 4.8L" subtext="3 Invoices Pending" icon={IndianRupee} />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              
+              {/* Projects Grid */}
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-slate-100 flex justify-between items-center">
+                  <h3 className="font-semibold text-slate-800">Live Projects</h3>
+                  <span className="text-xs text-slate-400">{projects.length} Active Sites</span>
+                </div>
+                <div className="divide-y divide-slate-50">
+                  {projects.map(project => (
+                    <div 
+                      key={project.id} 
+                      onClick={() => setViewProject(project.id)}
+                      className="p-5 hover:bg-slate-50 transition-colors cursor-pointer group"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <h4 className="font-medium text-slate-800 group-hover:text-blue-900 flex items-center gap-2">{project.name} <ArrowRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-500"/></h4>
+                          <p className="text-xs text-slate-500 flex items-center gap-1 mt-1"><MapPin size={12} /> {project.location}</p>
+                        </div>
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${project.issues > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{project.issues > 0 ? `${project.issues} Issues` : 'On Track'}</span>
+                      </div>
+                      <div className="mt-3 flex items-center gap-4">
+                        <div className="flex-1">
+                          <div className="flex justify-between text-xs mb-1 text-slate-500"><span>Progress</span><span>{project.progress}%</span></div>
+                          <ProgressBar value={project.progress} color={project.progress > 80 ? "bg-emerald-500" : "bg-blue-600"} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Vendor Ledger */}
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                 <div className="p-5 border-b border-slate-100 flex justify-between items-center"><h3 className="font-semibold text-slate-800 flex items-center gap-2"><Store size={18}/> Vendor Ledger</h3></div>
+                 <div className="divide-y divide-slate-50">
+                   {vendors.map(v => (
+                     <div key={v.id} className="p-4 flex justify-between items-center">
+                       <div><p className="font-bold text-slate-700">{v.name}</p><p className="text-xs text-slate-500">Paid: ₹{(v.paid/100000).toFixed(1)}L / Billed: ₹{(v.billed/100000).toFixed(1)}L</p></div>
+                       <div className="text-right"><p className="font-bold text-red-600 text-sm">Due: ₹{(v.billed - v.paid).toLocaleString()}</p></div>
+                     </div>
+                   ))}
+                 </div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+               <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-blue-50/50">
+                  <h3 className="font-semibold text-slate-800 flex items-center gap-2"><CheckCircle2 size={18} className="text-blue-600"/> Approval Queue</h3>
+                  <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded-full">{requests.filter(r => r.status === 'pending').length} Pending</span>
+                </div>
+                <div className="divide-y divide-slate-50 max-h-[400px] overflow-y-auto">
+                  {requests.filter(r => r.status === 'pending').map(req => (
+                    <div key={req.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-blue-100 p-2 rounded-lg text-blue-600"><Briefcase size={20}/></div>
+                        <div><h4 className="font-medium text-slate-800">{req.item}</h4><p className="text-xs text-slate-500">{req.quantity} • {req.project}</p></div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-slate-700">₹{req.amount.toLocaleString()}</span>
+                        {req.billUrl && <button onClick={() => setSelectedBill({url: req.billUrl, amount: req.amount, id: req.id})} className="flex items-center gap-1 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-xs font-bold hover:bg-purple-100 border border-purple-100"><Eye size={12} /> Bill</button>}
+                        <div className="flex gap-1">
+                          <button onClick={() => handleRejectRequest(req.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-lg"><X size={16}/></button>
+                          <button onClick={() => handleApproveRequest(req.id)} className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg"><Check size={16}/></button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {requests.filter(r => r.status === 'pending').length === 0 && <p className="p-5 text-slate-400 text-sm">No pending requests.</p>}
+                </div>
+              </div>
+
+               <div className="bg-slate-50 rounded-xl border border-slate-200 p-5 h-full overflow-y-auto max-h-[500px]">
+                 <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2"><Clock size={16} /> Live Site Feed</h3>
+                 <div className="space-y-6">
+                   {activities.map((activity) => (
+                     <div key={activity.id} className="relative pl-6 border-l-2 border-slate-200 last:border-0">
+                       <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white ${activity.type === 'alert' ? 'bg-red-500' : 'bg-blue-500'}`} />
+                       <div><p className="text-sm font-medium text-slate-800">{activity.text}</p><div className="flex justify-between mt-1"><span className="text-xs text-slate-500">{activity.user}</span><span className="text-xs text-slate-400">{activity.time}</span></div></div>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+            </div>
+          </div>
+        </>
+      ) : (
+        // PROJECT DETAIL VIEW
+        <div className="animate-fadeIn">
+          {(() => {
+            const project = projects.find(p => p.id === viewProject);
+            const siteWorkers = workers.filter(w => w.projectId === viewProject);
+            const est = estimations[viewProject] || estimations[1]; // Fallback for demo
+            
+            return (
+              <div className="space-y-6">
+                <button onClick={() => setViewProject(null)} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-medium"><ArrowLeft size={18}/> Back to Dashboard</button>
+                
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h1 className="text-3xl font-bold text-slate-900">{project.name}</h1>
+                    <p className="text-slate-500 flex items-center gap-2 mt-1"><MapPin size={16}/> {project.location} • <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold">{project.status}</span></p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold text-slate-700">₹{req.amount.toLocaleString()}</span>
-                    {req.billUrl && <button onClick={() => setSelectedBill({url: req.billUrl, amount: req.amount, id: req.id})} className="flex items-center gap-1 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-xs font-bold hover:bg-purple-100 border border-purple-100"><Eye size={12} /> View Bill</button>}
-                    <div className="flex gap-1">
-                      <button onClick={() => handleRejectRequest(req.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-lg"><X size={16}/></button>
-                      <button onClick={() => handleApproveRequest(req.id)} className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg"><Check size={16}/></button>
+                  <div className="text-right">
+                    <p className="text-sm text-slate-500">Supervisor</p>
+                    <p className="font-bold text-slate-800">{project.supervisor}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* ESTIMATION vs ACTUALS (CORE FEATURE) */}
+                  <div className="lg:col-span-2 space-y-6">
+                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Ruler size={18}/> Estimation vs Actuals</h3>
+                        <div className="space-y-5">
+                           {/* Material Estimation */}
+                           {Object.entries(est.materials).map(([name, data]) => {
+                              const percent = (data.used / data.estimated) * 100;
+                              const isOver = percent > 100;
+                              return (
+                                 <div key={name}>
+                                    <div className="flex justify-between text-sm mb-1">
+                                       <span className="font-medium text-slate-700">{name}</span>
+                                       <span className={`font-mono ${isOver ? 'text-red-600 font-bold' : 'text-slate-500'}`}>
+                                          {data.used} / {data.estimated} {data.unit}
+                                       </span>
+                                    </div>
+                                    <ProgressBar value={percent} color="bg-blue-600" />
+                                    {isOver && <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1"><AlertTriangle size={10}/> Exceeded by {data.used - data.estimated} {data.unit}</p>}
+                                 </div>
+                              );
+                           })}
+                           
+                           <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                              <div>
+                                 <p className="text-xs text-slate-500 mb-1">Labour Days</p>
+                                 <div className="flex items-end gap-2">
+                                    <span className="text-xl font-bold text-slate-800">{est.labor.used}</span>
+                                    <span className="text-xs text-slate-400 mb-1">/ {est.labor.estimated}</span>
+                                 </div>
+                                 <ProgressBar value={(est.labor.used/est.labor.estimated)*100} color="bg-purple-600"/>
+                              </div>
+                              <div>
+                                 <p className="text-xs text-slate-500 mb-1">Timeline</p>
+                                 <div className="flex items-end gap-2">
+                                    <span className="text-xl font-bold text-slate-800">{est.timeline.used}</span>
+                                    <span className="text-xs text-slate-400 mb-1">/ {est.timeline.estimated} Days</span>
+                                 </div>
+                                 <ProgressBar value={(est.timeline.used/est.timeline.estimated)*100} color="bg-orange-500"/>
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+
+                     {/* WORKFORCE LIST */}
+                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                           <h3 className="font-bold text-slate-800 flex items-center gap-2"><Users size={18}/> Site Workforce ({siteWorkers.length})</h3>
+                        </div>
+                        <div className="divide-y divide-slate-50">
+                           {siteWorkers.length === 0 && <p className="p-8 text-center text-slate-400">No workers assigned to this site today.</p>}
+                           {siteWorkers.map(worker => (
+                           <div key={worker.id} className="p-4 hover:bg-slate-50">
+                              <div className="flex justify-between items-start mb-2">
+                                 <div>
+                                 <p className="font-bold text-slate-800">{worker.name}</p>
+                                 <p className="text-xs text-slate-500">{worker.role}</p>
+                                 </div>
+                                 <span className={`text-xs px-2 py-1 rounded font-bold ${worker.status === 'P' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                 {worker.status === 'P' ? 'Present' : 'Absent'}
+                                 </span>
+                              </div>
+                              <div className="bg-slate-50 p-3 rounded border border-slate-100 mt-2">
+                                 <p className="text-xs font-bold text-slate-500 uppercase mb-1">Task & Log</p>
+                                 <p className="text-sm font-medium text-slate-800">{worker.task}</p>
+                                 <p className="text-xs text-slate-600 italic">"{worker.workLog}"</p>
+                              </div>
+                           </div>
+                           ))}
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* STATS & ALERTS */}
+                  <div className="space-y-6">
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                      <h3 className="font-bold text-slate-800 mb-4">Financials</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <div className="flex justify-between text-sm mb-1"><span>Budget Used</span><span className="font-bold">{(project.spent/project.budget*100).toFixed(0)}%</span></div>
+                          <ProgressBar value={(project.spent/project.budget*100)} color="bg-blue-600" />
+                          <p className="text-xs text-slate-500 mt-1">₹{(project.spent/100000).toFixed(1)}L / ₹{(project.budget/100000).toFixed(1)}L</p>
+                        </div>
+                        <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                          <span className="text-sm text-slate-600">Pending Issues</span>
+                          <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold">{project.issues}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              ))}
-              {requests.filter(r => r.status === 'pending').length === 0 && <p className="p-5 text-slate-400 text-sm">No pending requests.</p>}
-            </div>
-          </div>
-          
-          {/* Vendor Ledger */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-             <div className="p-5 border-b border-slate-100 flex justify-between items-center"><h3 className="font-semibold text-slate-800 flex items-center gap-2"><Store size={18}/> Vendor Ledger</h3></div>
-             <div className="divide-y divide-slate-50">
-               {vendors.map(v => (
-                 <div key={v.id} className="p-4 flex justify-between items-center">
-                   <div><p className="font-bold text-slate-700">{v.name}</p><p className="text-xs text-slate-500">Paid: ₹{(v.paid/100000).toFixed(1)}L / Billed: ₹{(v.billed/100000).toFixed(1)}L</p></div>
-                   <div className="text-right"><p className="font-bold text-red-600 text-sm">Due: ₹{(v.billed - v.paid).toLocaleString()}</p></div>
-                 </div>
-               ))}
-             </div>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-           <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2"><CalendarIcon size={16} /> Schedule</h3>
-              <div className="space-y-3">
-                 {meetings.map(meeting => (
-                    <div key={meeting.id} className="flex gap-3 items-start p-3 bg-slate-50 rounded-lg border border-slate-100">
-                       <div className="bg-white p-2 rounded border border-slate-200 text-center min-w-[50px]"><p className="text-[10px] text-slate-500 uppercase font-bold">{meeting.date.split(' ')[0]}</p><p className="text-sm font-bold text-slate-800">{meeting.time.split(':')[0]}</p></div>
-                       <div><p className="text-sm font-medium text-slate-800">{meeting.title}</p><p className="text-xs text-slate-500">{meeting.type} • {meeting.time}</p></div>
-                    </div>
-                 ))}
               </div>
-           </div>
-           <div className="bg-slate-50 rounded-xl border border-slate-200 p-5 h-full overflow-y-auto max-h-[500px]">
-             <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2"><Clock size={16} /> Live Site Feed</h3>
-             <div className="space-y-6">
-               {activities.map((activity) => (
-                 <div key={activity.id} className="relative pl-6 border-l-2 border-slate-200 last:border-0">
-                   <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white ${activity.type === 'alert' ? 'bg-red-500' : 'bg-blue-500'}`} />
-                   <div><p className="text-sm font-medium text-slate-800">{activity.text}</p><div className="flex justify-between mt-1"><span className="text-xs text-slate-500">{activity.user}</span><span className="text-xs text-slate-400">{activity.time}</span></div></div>
-                 </div>
-               ))}
-             </div>
-           </div>
+            );
+          })()}
         </div>
-      </div>
+      )}
     </div>
   );
 
   // 2. OWNER MOBILE APP
   const OwnerMobileApp = () => {
     const [tab, setTab] = useState('home');
-    const [selectedProjectForMedia, setSelectedProjectForMedia] = useState(null);
+    const [viewProjectId, setViewProjectId] = useState(null); 
 
     return (
       <div className="max-w-md mx-auto bg-slate-50 h-[650px] rounded-xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col relative">
@@ -394,6 +611,7 @@ export default function ConstructionOS() {
          </div>
 
          <div className="flex-1 overflow-y-auto pt-4 px-4 pb-20 -mt-4 z-0">
+            {/* TAB: HOME */}
             {tab === 'home' && (
               <>
                 {leakageAlerts.length > 0 && <div className="bg-red-500 text-white p-3 rounded-xl mb-4 text-xs font-bold shadow-lg flex items-center gap-2"><ShieldAlert size={16}/> {leakageAlerts.length} Critical Leakage Alerts!</div>}
@@ -414,9 +632,118 @@ export default function ConstructionOS() {
                 </div>
               </>
             )}
+            
+            {/* TAB: PROJECTS (WITH DRILL-DOWN) */}
+            {tab === 'projects' && (
+               <div className="space-y-4 pt-2">
+                  {!viewProjectId ? (
+                     <>
+                        <h3 className="font-bold text-slate-800 mb-2">Your Sites</h3>
+                        {projects.map(p => (
+                           <div key={p.id} onClick={() => setViewProjectId(p.id)} className="bg-white p-4 rounded-xl border border-slate-200 active:scale-95 transition-transform cursor-pointer shadow-sm">
+                              <div className="flex justify-between items-start mb-2">
+                                <h3 className="font-bold text-slate-800">{p.name}</h3>
+                                <ArrowRight size={16} className="text-slate-400"/>
+                              </div>
+                              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-2"><div className="bg-blue-600 h-full" style={{width: `${p.progress}%`}}></div></div>
+                              <div className="flex justify-between text-xs text-slate-500"><span>{p.progress}% Complete</span><span>{p.location}</span></div>
+                           </div>
+                        ))}
+                     </>
+                  ) : (
+                     <div className="animate-fadeIn">
+                        {(() => {
+                           const p = projects.find(prj => prj.id === viewProjectId);
+                           const siteWorkers = workers.filter(w => w.projectId === viewProjectId);
+                           const est = estimations[viewProjectId] || estimations[1];
+
+                           return (
+                              <>
+                                 <button onClick={() => setViewProjectId(null)} className="text-xs text-slate-500 mb-4 flex items-center gap-1 font-bold"><ArrowLeft size={14}/> Back to All Sites</button>
+                                 
+                                 {/* Project Header */}
+                                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-4">
+                                    <h3 className="font-bold text-blue-900 text-lg">{p.name}</h3>
+                                    <p className="text-xs text-blue-600 flex items-center gap-1 mt-1"><MapPin size={12}/> {p.location}</p>
+                                 </div>
+
+                                 {/* ESTIMATION CARD (MOBILE) */}
+                                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-4">
+                                    <h4 className="font-bold text-slate-800 mb-3 flex items-center gap-2 text-xs uppercase"><Ruler size={14}/> Estimations</h4>
+                                    <div className="space-y-3">
+                                       {Object.entries(est.materials).slice(0, 3).map(([name, data]) => {
+                                          const percent = (data.used / data.estimated) * 100;
+                                          return (
+                                             <div key={name}>
+                                                <div className="flex justify-between text-[10px] mb-1">
+                                                   <span className="font-medium text-slate-700">{name}</span>
+                                                   <span className="text-slate-500">{data.used} / {data.estimated}</span>
+                                                </div>
+                                                <ProgressBar value={percent} color="bg-blue-600" />
+                                             </div>
+                                          );
+                                       })}
+                                    </div>
+                                 </div>
+
+                                 {/* Daily Updates Section */}
+                                 <h4 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><ClipboardList size={16}/> Daily Site Updates</h4>
+                                 <div className="space-y-3">
+                                    {siteWorkers.length === 0 && <p className="text-center text-slate-400 text-xs py-4">No work logged today.</p>}
+                                    {siteWorkers.map(w => (
+                                       <div key={w.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                                          <div className="flex justify-between items-center mb-2">
+                                             <span className="font-bold text-slate-700 text-sm">{w.name} <span className="text-xs font-normal text-slate-400">({w.role})</span></span>
+                                             <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${w.status === 'P' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{w.status === 'P' ? 'Present' : 'Absent'}</span>
+                                          </div>
+                                          <div className="bg-slate-50 p-2 rounded text-xs border border-slate-100">
+                                             <p className="font-bold text-slate-500 uppercase text-[9px] mb-1">Task Assigned</p>
+                                             <p className="text-slate-800 mb-2">{w.task}</p>
+                                             <p className="font-bold text-slate-500 uppercase text-[9px] mb-1">Work Log</p>
+                                             <p className="text-slate-600 italic">"{w.workLog}"</p>
+                                          </div>
+                                       </div>
+                                    ))}
+                                 </div>
+                              </>
+                           );
+                        })()}
+                     </div>
+                  )}
+               </div>
+            )}
+
+            {tab === 'calendar' && (
+               <div className="pt-2">
+                  <h3 className="font-bold text-slate-800 mb-4">Upcoming Schedule</h3>
+                  <div className="space-y-3">
+                     {meetings.map(meeting => (
+                        <div key={meeting.id} className="flex gap-4 items-center bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                           <div className="text-center min-w-[40px]"><p className="text-xs text-blue-600 font-bold">{meeting.time}</p></div>
+                           <div className="h-8 w-1 bg-slate-100 rounded-full"></div>
+                           <div><p className="text-sm font-bold text-slate-800">{meeting.title}</p><p className="text-xs text-slate-500">{meeting.type} • {meeting.date}</p></div>
+                        </div>
+                     ))}
+                  </div>
+               </div>
+            )}
+
             {tab === 'finance' && (
                <div className="pt-2 space-y-4">
                   <h3 className="font-bold text-slate-800">Financial Overview</h3>
+                  
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-2 gap-3">
+                     <div className="bg-blue-900 text-white p-4 rounded-xl shadow-lg shadow-blue-900/20">
+                        <p className="text-blue-200 text-xs mb-1">Total Spent</p>
+                        <p className="text-xl font-bold">₹ 3.2 Cr</p>
+                     </div>
+                     <div className="bg-white p-4 rounded-xl border border-slate-200">
+                        <p className="text-slate-400 text-xs mb-1">Pending Invoices</p>
+                        <p className="text-xl font-bold text-slate-800">₹ 4.5 L</p>
+                     </div>
+                  </div>
+
                   <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                      <p className="text-xs font-bold text-slate-400 uppercase">Vendor Ledger</p>
                      <div className="divide-y divide-slate-50 mt-2">
@@ -433,6 +760,8 @@ export default function ConstructionOS() {
          </div>
          <div className="absolute bottom-0 left-0 w-full bg-white border-t border-slate-200 flex py-1 z-20">
             <TabButton active={tab==='home'} onClick={()=>setTab('home')} icon={LayoutDashboard} label="Home" badge={requests.filter(r => r.status === 'pending').length} />
+            <TabButton active={tab==='projects'} onClick={()=>setTab('projects')} icon={Briefcase} label="Sites" />
+            <TabButton active={tab==='calendar'} onClick={()=>setTab('calendar')} icon={CalendarIcon} label="Calendar" />
             <TabButton active={tab==='finance'} onClick={()=>setTab('finance')} icon={IndianRupee} label="Finance" />
          </div>
       </div>
@@ -451,6 +780,11 @@ export default function ConstructionOS() {
     
     // Audit State
     const [auditData, setAuditData] = useState({}); // Stores audit inputs for each worker
+    
+    // Exceed Logic State
+    const [reasonModalOpen, setReasonModalOpen] = useState(false);
+    const [currentAudit, setCurrentAudit] = useState(null); // { task, workerId, consumed, exceededAmount }
+    const [excessReason, setExcessReason] = useState("");
 
     const handleFileUpload = (e, type, workerId = null) => {
        if (type === 'bill') { setNewRequest({ ...newRequest, bill: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&q=80&w=300' }); showToast("Bill Uploaded"); return; }
@@ -464,7 +798,7 @@ export default function ConstructionOS() {
     const handleAddWorker = () => {
        if(!newWorkerData.name || !newWorkerData.wage) return;
        const newId = workers.length + 1;
-       setWorkers([...workers, { id: newId, name: newWorkerData.name, role: newWorkerData.role, wage: parseInt(newWorkerData.wage), status: 'P', task: '-', workLog: '', photos: { before: null, after: null } }]);
+       setWorkers([...workers, { id: newId, name: newWorkerData.name, role: newWorkerData.role, wage: parseInt(newWorkerData.wage), status: 'P', task: '-', workLog: '', projectId: 1, photos: { before: null, after: null } }]);
        setIsAddWorkerOpen(false);
        setNewWorkerData({ name: '', role: 'Helper', wage: '' });
        showToast("Worker Added");
@@ -472,7 +806,44 @@ export default function ConstructionOS() {
 
     const handleAuditSubmit = (task, workerId) => {
        const data = auditData[workerId];
-       if(data) checkLeakage(task, data.workQty, data.matConsumed);
+       if (!data) return;
+       
+       const rule = CONSUMPTION_RULES[task];
+       if (rule) {
+          const allowed = data.workQty * rule.rate;
+          const actual = parseFloat(data.matConsumed);
+          
+          if (actual > allowed * 1.1) {
+             // Trigger Reason Modal
+             setCurrentAudit({ task, workerId, consumed: actual, allowed: allowed, unit: rule.unit });
+             setReasonModalOpen(true);
+          } else {
+             // Normal Success
+             showToast("Consumption Logged: Within Limits");
+             setAuditData(prev => {
+                const newState = { ...prev };
+                delete newState[workerId];
+                return newState;
+             });
+          }
+       }
+    };
+
+    const submitExcessReason = () => {
+        if (!excessReason) return showToast("Please enter a reason");
+        
+        // Log the alert with reason
+        const extra = (currentAudit.consumed - currentAudit.allowed).toFixed(1);
+        const alertMsg = `⚠️ LEAKAGE: ${currentAudit.task} used ${extra} ${currentAudit.unit} excess! Reason: "${excessReason}"`;
+        
+        setLeakageAlerts(prev => [alertMsg, ...prev]); // This updates Global State in a real app (context) but here simulating via prop/callback isn't setup so we do local + toast
+        // In this single-file simul, we can't update Parent state easily from here without props, 
+        // so we will show a success toast simulating the backend log.
+        showToast("⚠️ Alert & Reason sent to Owner");
+        
+        setReasonModalOpen(false);
+        setExcessReason("");
+        setCurrentAudit(null);
     };
 
     const addExpense = () => {
@@ -490,6 +861,29 @@ export default function ConstructionOS() {
 
     return (
       <div className="max-w-md mx-auto bg-white h-[650px] rounded-xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col relative">
+         
+         {/* Reason for Excess Modal */}
+         <Modal isOpen={reasonModalOpen} onClose={()=>setReasonModalOpen(false)} title="Excess Consumption Alert">
+            <div className="space-y-4">
+                <div className="bg-red-50 p-3 rounded-lg border border-red-100 text-red-800 text-sm">
+                    <strong>Limit Exceeded!</strong>
+                    <p>Allowed: {currentAudit?.allowed.toFixed(1)} {currentAudit?.unit}</p>
+                    <p>Used: {currentAudit?.consumed} {currentAudit?.unit}</p>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Reason for Excess</label>
+                    <textarea 
+                        className="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 outline-none" 
+                        placeholder="e.g. Rain damage, Bad quality bricks..."
+                        rows={3}
+                        value={excessReason}
+                        onChange={(e) => setExcessReason(e.target.value)}
+                    />
+                </div>
+                <button onClick={submitExcessReason} className="w-full py-3 bg-red-600 text-white rounded-lg font-bold shadow-lg">Submit Explanation</button>
+            </div>
+         </Modal>
+
          <Modal isOpen={isAddWorkerOpen} onClose={()=>setIsAddWorkerOpen(false)} title="Add Daily Wager">
             <div className="space-y-4">
                <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Worker Name</label><input type="text" className="w-full p-2 border border-slate-300 rounded-lg text-sm outline-none" value={newWorkerData.name} onChange={(e) => setNewWorkerData({...newWorkerData, name: e.target.value})} placeholder="e.g. Raju"/></div>
@@ -508,9 +902,24 @@ export default function ConstructionOS() {
             {/* TAB: DAILY WORK */}
             {tab === 'work' && (
                <div className="space-y-6">
+                  {/* Estimation Status Card (NEW) */}
+                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
+                     <h3 className="font-bold text-blue-900 text-xs uppercase mb-3 flex items-center gap-2"><Ruler size={14}/> Site Estimates</h3>
+                     <div className="space-y-3">
+                        <div>
+                           <div className="flex justify-between text-[10px] text-blue-800 mb-1"><span>Cement Used</span><span>4200 / 5000 Bags</span></div>
+                           <div className="h-1.5 w-full bg-blue-200 rounded-full overflow-hidden"><div className="h-full bg-blue-600 w-[84%]"></div></div>
+                        </div>
+                        <div>
+                           <div className="flex justify-between text-[10px] text-blue-800 mb-1"><span>Bricks Used</span><span>48k / 50k Pcs</span></div>
+                           <div className="h-1.5 w-full bg-blue-200 rounded-full overflow-hidden"><div className="h-full bg-orange-500 w-[96%]"></div></div>
+                        </div>
+                     </div>
+                  </div>
+
                   <div className="flex justify-between items-center"><h3 className="font-bold text-slate-800 flex items-center gap-2"><ClipboardList size={18}/> Workforce</h3><button onClick={() => setIsAddWorkerOpen(true)} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 border border-blue-200"><UserPlus size={14}/> Add</button></div>
                   <div className="space-y-4">
-                     {workers.map(worker => {
+                     {workers.filter(w => w.projectId === 1).map(worker => {
                         const isCustomTask = !CONSTRUCTION_TASKS.includes(worker.task) && worker.task !== "-";
                         const selectValue = isCustomTask ? "Others" : (CONSTRUCTION_TASKS.includes(worker.task) ? worker.task : "");
                         
@@ -656,7 +1065,7 @@ export default function ConstructionOS() {
           <NavButton id="supervisor" label="Supervisor App" icon={HardHat} />
           <NavButton id="client" label="Client App" icon={Phone} />
         </nav>
-        <div className="p-4 border-t border-slate-800 text-xs text-center text-slate-500">v9.0 • Connected</div>
+        <div className="p-4 border-t border-slate-800 text-xs text-center text-slate-500">v12.0 • Connected</div>
       </aside>
 
       {/* Main Area */}
