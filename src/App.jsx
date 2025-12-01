@@ -4,7 +4,8 @@ import {
   CheckCircle2, Clock, ChevronRight, Menu, X, Camera, MapPin, IndianRupee, 
   Briefcase, ArrowRight, Download, Phone, MessageSquare, Plus, Image as ImageIcon, 
   Check, XCircle, Wallet, Calendar as CalendarIcon, Video, PieChart, Share2, 
-  LogOut, Lock, Building2, Package, UploadCloud, Eye, Save
+  LogOut, Lock, Building2, Package, UploadCloud, Eye, Save, ClipboardList,
+  UserPlus
 } from 'lucide-react';
 
 // --- CONSTANTS ---
@@ -33,13 +34,16 @@ const CONSTRUCTION_TASKS = [
   "Others"
 ];
 
+const ROLES = ["Mason", "Helper", "Electrician", "Plumber", "Carpenter", "Supervisor"];
+
 // --- MOCK DATA ---
 
 const WORKERS = [
-  { id: 1, name: "Ramesh Kumar", role: "Mason", wage: 900, status: "P", task: "Plastering", workLog: "Completed 200 sqft wall" },
-  { id: 2, name: "Suresh Yadav", role: "Mason", wage: 900, status: "P", task: "Flooring (Tiles/Marble/Granite)", workLog: "Leveling master bedroom" },
-  { id: 3, name: "Mohd. Aslam", role: "Helper", wage: 500, status: "P", task: "Material Shifting / Loading", workLog: "Moved 50 cement bags" },
-  { id: 4, name: "Pintu Singh", role: "Helper", wage: 500, status: "A", task: "-", workLog: "-" },
+  { id: 1, name: "Ramesh Kumar", role: "Mason", wage: 900, status: "P", task: "Plastering", workLog: "Completed 200 sqft wall", photos: { before: null, after: null } },
+  { id: 2, name: "Suresh Yadav", role: "Mason", wage: 900, status: "P", task: "Flooring (Tiles/Marble/Granite)", workLog: "Leveling master bedroom", photos: { before: null, after: null } },
+  { id: 3, name: "Mohd. Aslam", role: "Helper", wage: 500, status: "P", task: "Material Shifting / Loading", workLog: "Moved 50 cement bags", photos: { before: null, after: null } },
+  { id: 4, name: "Pintu Singh", role: "Helper", wage: 500, status: "A", task: "-", workLog: "-", photos: { before: null, after: null } },
+  { id: 5, name: "Vikram Das", role: "Electrician", wage: 1200, status: "P", task: "Electrical - Wiring/Fitting", workLog: "Main board connection", photos: { before: null, after: null } },
 ];
 
 const INITIAL_PROJECTS = [
@@ -194,7 +198,7 @@ export default function ConstructionOS() {
   // UI State
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [newProjectData, setNewProjectData] = useState({ name: '', location: '', budget: '' });
-  const [selectedBill, setSelectedBill] = useState(null); // For view bill modal
+  const [selectedBill, setSelectedBill] = useState(null);
 
   // --- HELPERS ---
 
@@ -242,22 +246,23 @@ export default function ConstructionOS() {
     showToast('New Project Created Successfully');
   };
 
-  // Helper to update worker tasks in state
   const handleTaskUpdate = (workerId, newTask) => {
     setWorkers(workers.map(w => w.id === workerId ? { ...w, task: newTask } : w));
   };
 
-  // Helper to update worker logs
   const handleLogUpdate = (workerId, newLog) => {
     setWorkers(workers.map(w => w.id === workerId ? { ...w, workLog: newLog } : w));
   };
 
+  const handleAttendance = (id, status) => {
+    setWorkers(workers.map(w => w.id === id ? { ...w, status } : w));
+  };
+
   // --- SUB-APPS ---
 
-  // 1. OWNER DESKTOP DASHBOARD
+  // 1. OWNER DESKTOP
   const OwnerDashboard = () => (
     <div className="space-y-6 pb-20 animate-fadeIn">
-      
       {/* Modals */}
       <Modal isOpen={isProjectModalOpen} onClose={()=>setIsProjectModalOpen(false)} title="Start New Project">
         <div className="space-y-4">
@@ -322,35 +327,20 @@ export default function ConstructionOS() {
             </div>
           </div>
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="font-semibold text-slate-800">Live Project Status</h3>
-              <span className="text-xs text-blue-600 font-medium cursor-pointer">View All Details</span>
-            </div>
-            <div className="divide-y divide-slate-50">
-              {projects.map(project => (
-                <div key={project.id} className="p-5 hover:bg-slate-50 transition-colors cursor-pointer group">
-                  <div className="flex justify-between items-start mb-2">
-                    <div><h4 className="font-medium text-slate-800 group-hover:text-blue-900">{project.name}</h4><p className="text-xs text-slate-500 flex items-center gap-1 mt-1"><MapPin size={12} /> {project.location}</p></div>
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${project.issues > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{project.issues > 0 ? `${project.issues} Issues` : 'On Track'}</span>
-                  </div>
-                  <div className="mt-3 flex items-center gap-4">
-                    <div className="flex-1">
-                      <div className="flex justify-between text-xs mb-1 text-slate-500"><span>Progress</span><span>{project.progress}%</span></div>
-                      <ProgressBar value={project.progress} color={project.progress > 80 ? "bg-emerald-500" : "bg-blue-600"} />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+             <div className="p-5 border-b border-slate-100"><h3 className="font-semibold text-slate-800">Live Project Status</h3></div>
+             <div className="divide-y divide-slate-50">
+               {projects.map(project => (
+                 <div key={project.id} className="p-5 hover:bg-slate-50 cursor-pointer">
+                   <div className="flex justify-between mb-2"><div><h4 className="font-medium text-slate-800">{project.name}</h4><p className="text-xs text-slate-500"><MapPin size={12} className="inline"/> {project.location}</p></div><span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full h-fit">{project.status}</span></div>
+                   <ProgressBar value={project.progress} color="bg-blue-600" />
+                 </div>
+               ))}
+             </div>
           </div>
         </div>
-
         <div className="space-y-6">
            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <div className="flex justify-between items-center mb-4">
-                 <h3 className="font-semibold text-slate-800 flex items-center gap-2"><CalendarIcon size={16} /> Schedule</h3>
-                 <span className="text-xs text-blue-600 cursor-pointer">+ Add</span>
-              </div>
+              <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2"><CalendarIcon size={16} /> Schedule</h3>
               <div className="space-y-3">
                  {meetings.map(meeting => (
                     <div key={meeting.id} className="flex gap-3 items-start p-3 bg-slate-50 rounded-lg border border-slate-100">
@@ -487,17 +477,59 @@ export default function ConstructionOS() {
 
   // 3. SUPERVISOR APP
   const SupervisorApp = () => {
-    const [tab, setTab] = useState('report');
-    
-    // Feature States
+    const [tab, setTab] = useState('work');
     const [newRequest, setNewRequest] = useState({ item: '', qty: '', amount: '', bill: null });
-    const [media, setMedia] = useState({ before: null, after: null });
+    
+    // Add Worker State
+    const [isAddWorkerOpen, setIsAddWorkerOpen] = useState(false);
+    const [newWorkerData, setNewWorkerData] = useState({ name: '', role: 'Helper', wage: '' });
 
-    const handleFileUpload = (e, type) => {
-       if (type === 'bill') setNewRequest({ ...newRequest, bill: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&q=80&w=300' });
-       if (type === 'before') setMedia({ ...media, before: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&q=80&w=300' });
-       if (type === 'after') setMedia({ ...media, after: 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&q=80&w=300' });
-       showToast("File Uploaded (Simulated)");
+    const handleFileUpload = (e, type, workerId = null) => {
+       // Bill Upload
+       if (type === 'bill') {
+          setNewRequest({ ...newRequest, bill: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&q=80&w=300' });
+          showToast("Bill Uploaded");
+          return;
+       }
+       
+       // Worker Photo Upload
+       if (workerId) {
+          const newUrl = type === 'before' 
+             ? 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&q=80&w=300'
+             : 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&q=80&w=300';
+          
+          setWorkers(workers.map(w => {
+             if (w.id === workerId) {
+                return { 
+                   ...w, 
+                   photos: { 
+                      ...w.photos, 
+                      [type]: newUrl 
+                   } 
+                };
+             }
+             return w;
+          }));
+          showToast(`${type === 'before' ? 'Before' : 'After'} photo saved for worker`);
+       }
+    };
+
+    const handleAddWorker = () => {
+       if(!newWorkerData.name || !newWorkerData.wage) return;
+       const newId = workers.length + 1;
+       setWorkers([...workers, {
+          id: newId,
+          name: newWorkerData.name,
+          role: newWorkerData.role,
+          wage: parseInt(newWorkerData.wage),
+          status: 'P',
+          task: '-',
+          workLog: '',
+          photos: { before: null, after: null }
+       }]);
+       setIsAddWorkerOpen(false);
+       setNewWorkerData({ name: '', role: 'Helper', wage: '' });
+       showToast("New Worker Added to Muster Roll");
     };
 
     const submitProcurement = () => {
@@ -517,93 +549,98 @@ export default function ConstructionOS() {
 
     return (
       <div className="max-w-md mx-auto bg-white h-[650px] rounded-xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col relative">
+         {/* Add Worker Modal */}
+         <Modal isOpen={isAddWorkerOpen} onClose={()=>setIsAddWorkerOpen(false)} title="Add Daily Wager">
+            <div className="space-y-4">
+               <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Worker Name</label><input type="text" className="w-full p-2 border border-slate-300 rounded-lg text-sm focus:border-blue-500 outline-none" value={newWorkerData.name} onChange={(e) => setNewWorkerData({...newWorkerData, name: e.target.value})} placeholder="e.g. Raju Singh"/></div>
+               <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Role</label>
+               <select className="w-full p-2 border border-slate-300 rounded-lg text-sm outline-none" value={newWorkerData.role} onChange={(e) => setNewWorkerData({...newWorkerData, role: e.target.value})}>
+                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+               </select>
+               </div>
+               <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Daily Wage (₹)</label><input type="number" className="w-full p-2 border border-slate-300 rounded-lg text-sm focus:border-blue-500 outline-none" value={newWorkerData.wage} onChange={(e) => setNewWorkerData({...newWorkerData, wage: e.target.value})} placeholder="e.g. 500"/></div>
+               <button onClick={handleAddWorker} className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold shadow-lg mt-2">Add to List</button>
+            </div>
+         </Modal>
+
          <div className="bg-slate-900 text-white p-4 flex justify-between items-center shrink-0">
             <div><h2 className="font-bold text-lg">Site Ops</h2><p className="text-xs text-slate-400">Green Valley Heights</p></div>
             <div className="h-8 w-8 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600"><HardHat size={16}/></div>
          </div>
          <div className="flex-1 overflow-y-auto p-4 pb-20 bg-slate-50">
-            {/* TAB: DAILY REPORT (MEDIA) */}
-            {tab === 'report' && (
-               <div className="space-y-5">
-                  <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                     <h3 className="text-sm font-bold text-slate-800 mb-3">Daily Progress Media</h3>
-                     <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                           <p className="text-xs font-semibold text-slate-500 uppercase">Before Work</p>
-                           <div onClick={(e) => handleFileUpload(e, 'before')} className="aspect-square bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors relative overflow-hidden">
-                              {media.before ? <img src={media.before} className="w-full h-full object-cover" /> : <><Camera size={24} className="text-slate-400 mb-1" /><span className="text-[10px] font-bold text-slate-500">Tap to Upload</span></>}
-                           </div>
-                        </div>
-                        <div className="space-y-2">
-                           <p className="text-xs font-semibold text-slate-500 uppercase">After Work</p>
-                           <div onClick={(e) => handleFileUpload(e, 'after')} className="aspect-square bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors relative overflow-hidden">
-                              {media.after ? <img src={media.after} className="w-full h-full object-cover" /> : <><CheckCircle2 size={24} className="text-emerald-400 mb-1" /><span className="text-[10px] font-bold text-slate-500">Tap to Upload</span></>}
-                           </div>
-                        </div>
-                     </div>
+            {/* TAB: DAILY WORK (WORKERS + MEDIA) */}
+            {tab === 'work' && (
+               <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                     <h3 className="font-bold text-slate-800 flex items-center gap-2"><ClipboardList size={18}/> Workforce</h3>
+                     <button onClick={() => setIsAddWorkerOpen(true)} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 border border-blue-200"><UserPlus size={14}/> Add Worker</button>
                   </div>
-               </div>
-            )}
-            {/* TAB: WORKFORCE (ASSIGN TASKS) */}
-            {tab === 'workers' && (
-               <div className="space-y-4">
-                  <h3 className="font-bold text-slate-800">Assign Tasks</h3>
-                  {workers.map(worker => {
-                     const isCustomTask = !CONSTRUCTION_TASKS.includes(worker.task) && worker.task !== "-";
-                     const selectValue = isCustomTask ? "Others" : (CONSTRUCTION_TASKS.includes(worker.task) ? worker.task : "");
 
-                     return (
-                     <div key={worker.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                        <div className="flex justify-between items-start mb-2"><div><p className="font-bold text-slate-800">{worker.name}</p><p className="text-xs text-slate-500">{worker.role}</p></div><span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold">Present</span></div>
-                        <div className="space-y-2 mt-3">
-                           <div>
-                              <label className="text-[10px] font-bold text-slate-400 uppercase">Task Assigned</label>
-                              <select 
-                                 className="w-full text-xs p-2 border border-slate-200 rounded bg-slate-50 outline-none focus:border-blue-500 mb-2"
-                                 value={selectValue}
-                                 onChange={(e) => {
-                                    const val = e.target.value;
-                                    if (val === "Others") {
-                                       handleTaskUpdate(worker.id, ""); // Clear task so input shows up empty or ready for type
-                                    } else {
-                                       handleTaskUpdate(worker.id, val);
-                                    }
-                                 }}
-                              >
-                                 <option value="" disabled>Select Task</option>
-                                 {CONSTRUCTION_TASKS.map(task => (
-                                    <option key={task} value={task}>{task}</option>
-                                 ))}
-                              </select>
+                  {/* WORKER LIST */}
+                  <div className="space-y-4">
+                     {workers.map(worker => {
+                        const isCustomTask = !CONSTRUCTION_TASKS.includes(worker.task) && worker.task !== "-";
+                        const selectValue = isCustomTask ? "Others" : (CONSTRUCTION_TASKS.includes(worker.task) ? worker.task : "");
+
+                        return (
+                           <div key={worker.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                              {/* Header: Name & Attendance */}
+                              <div className="flex justify-between items-start mb-3 border-b border-slate-50 pb-3">
+                                 <div><p className="font-bold text-slate-800">{worker.name}</p><p className="text-xs text-slate-500">{worker.role}</p></div>
+                                 <div className="flex bg-slate-100 rounded p-1">
+                                    {['P','A','HD'].map(s => (
+                                       <button key={s} onClick={()=>handleAttendance(worker.id, s)} className={`text-[10px] px-2 py-0.5 rounded font-bold ${worker.status===s ? (s==='P'?'bg-emerald-500 text-white':s==='A'?'bg-red-500 text-white':'bg-orange-400 text-white') : 'text-slate-400'}`}>{s}</button>
+                                    ))}
+                                 </div>
+                              </div>
                               
-                              {(selectValue === "Others" || isCustomTask) && (
-                                 <input 
-                                    type="text" 
-                                    value={isCustomTask ? worker.task : ""} 
-                                    onChange={(e) => handleTaskUpdate(worker.id, e.target.value)}
-                                    className="w-full text-xs p-2 border border-blue-200 rounded bg-blue-50 outline-none animate-fadeIn" 
-                                    placeholder="Type custom task..." 
-                                    autoFocus
-                                 />
-                              )}
+                              {/* Task & Log */}
+                              <div className="space-y-2 mb-4">
+                                 <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Task</label>
+                                    <select 
+                                       className="w-full text-xs p-2 border border-slate-200 rounded bg-slate-50 outline-none focus:border-blue-500 mb-2"
+                                       value={selectValue}
+                                       onChange={(e) => {
+                                          const val = e.target.value;
+                                          if (val === "Others") handleTaskUpdate(worker.id, ""); 
+                                          else handleTaskUpdate(worker.id, val);
+                                       }}
+                                    >
+                                       <option value="" disabled>Select Task</option>
+                                       {CONSTRUCTION_TASKS.map(task => <option key={task} value={task}>{task}</option>)}
+                                    </select>
+                                    {(selectValue === "Others" || isCustomTask) && (
+                                       <input type="text" value={isCustomTask ? worker.task : ""} onChange={(e) => handleTaskUpdate(worker.id, e.target.value)} className="w-full text-xs p-2 border border-blue-200 rounded bg-blue-50 outline-none animate-fadeIn" placeholder="Type custom task..." />
+                                    )}
+                                 </div>
+                                 <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Log</label>
+                                    <textarea defaultValue={worker.workLog} onChange={(e) => handleLogUpdate(worker.id, e.target.value)} rows={1} className="w-full text-xs p-2 border border-slate-200 rounded bg-slate-50 outline-none focus:border-blue-500" placeholder="Work done..."></textarea>
+                                 </div>
+                              </div>
+
+                              {/* Worker Specific Photos */}
+                              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                 <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Proof of Work (Photos)</p>
+                                 <div className="grid grid-cols-2 gap-3">
+                                    <div onClick={(e) => handleFileUpload(e, 'before', worker.id)} className="aspect-video bg-white border border-dashed border-slate-300 rounded flex flex-col items-center justify-center cursor-pointer relative overflow-hidden">
+                                       {worker.photos?.before ? <img src={worker.photos.before} className="w-full h-full object-cover"/> : <><Camera size={16} className="text-slate-300"/><span className="text-[9px] text-slate-400">Before</span></>}
+                                    </div>
+                                    <div onClick={(e) => handleFileUpload(e, 'after', worker.id)} className="aspect-video bg-white border border-dashed border-slate-300 rounded flex flex-col items-center justify-center cursor-pointer relative overflow-hidden">
+                                       {worker.photos?.after ? <img src={worker.photos.after} className="w-full h-full object-cover"/> : <><CheckCircle2 size={16} className="text-slate-300"/><span className="text-[9px] text-slate-400">After</span></>}
+                                    </div>
+                                 </div>
+                              </div>
                            </div>
-                           <div>
-                              <label className="text-[10px] font-bold text-slate-400 uppercase">Work Done (Log)</label>
-                              <textarea 
-                                 defaultValue={worker.workLog} 
-                                 onChange={(e) => handleLogUpdate(worker.id, e.target.value)}
-                                 rows={2} 
-                                 className="w-full text-xs p-2 border border-slate-200 rounded bg-slate-50 outline-none focus:border-blue-500" 
-                                 placeholder="Describe work done..."
-                              ></textarea>
-                           </div>
-                        </div>
-                     </div>
-                     );
-                  })}
-                  <button onClick={() => showToast("Work Logs Saved")} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"><Save size={16}/> Save Work Logs</button>
+                        );
+                     })}
+                  </div>
+
+                  <button onClick={() => showToast("Daily Report Saved")} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"><Save size={16}/> Submit Daily Log</button>
                </div>
             )}
+
             {/* TAB: PROCUREMENT (UPLOAD BILLS) */}
             {tab === 'requests' && (
                <div className="space-y-4">
@@ -620,9 +657,8 @@ export default function ConstructionOS() {
             )}
          </div>
          <div className="absolute bottom-0 left-0 w-full bg-white border-t border-slate-200 flex py-1 z-20">
-            <TabButton active={tab==='report'} onClick={()=>setTab('report')} icon={Camera} label="Media" />
-            <TabButton active={tab==='workers'} onClick={()=>setTab('workers')} icon={Users} label="Workforce" />
-            <TabButton active={tab==='requests'} onClick={()=>setTab('requests')} icon={Wallet} label="Bills" />
+            <TabButton active={tab==='work'} onClick={()=>setTab('work')} icon={ClipboardList} label="Daily Work" />
+            <TabButton active={tab==='requests'} onClick={()=>setTab('requests')} icon={Wallet} label="Bills & Material" />
          </div>
       </div>
     );
@@ -687,7 +723,7 @@ export default function ConstructionOS() {
           <NavButton id="supervisor" label="Supervisor App" icon={HardHat} />
           <NavButton id="client" label="Client App" icon={Phone} />
         </nav>
-        <div className="p-4 border-t border-slate-800 text-xs text-center text-slate-500">v5.0 • Connected</div>
+        <div className="p-4 border-t border-slate-800 text-xs text-center text-slate-500">v7.0 • Connected</div>
       </aside>
 
       {/* Main Area */}
